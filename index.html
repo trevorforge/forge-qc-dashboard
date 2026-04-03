@@ -1,0 +1,406 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forge QC Dashboard</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;line-height:1.5}
+.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+h1{font-size:1.75rem;font-weight:700;margin-bottom:.25rem}
+.subtitle{color:#64748b;margin-bottom:2rem}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem;margin-bottom:2rem}
+.stat-card{background:#fff;border-radius:12px;padding:1rem;box-shadow:0 1px 3px rgba(0,0,0,.08);text-align:center}
+.stat-number{font-size:1.75rem;font-weight:700}
+.stat-label{font-size:.75rem;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-top:.25rem}
+.progress-bar{width:100%;height:8px;background:#e2e8f0;border-radius:4px;margin-bottom:2rem;overflow:hidden}
+.progress-fill{height:100%;background:#22c55e;border-radius:4px;transition:width .5s}
+.toolbar{display:flex;flex-wrap:wrap;gap:.5rem;margin-bottom:1.5rem;align-items:center}
+.filter-label{font-size:.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;margin-right:.25rem}
+.filter-btn{padding:.375rem .75rem;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;transition:all .15s}
+.filter-btn:hover{border-color:#94a3b8}
+.filter-btn.active{background:#1e293b;color:#fff;border-color:#1e293b}
+.filter-sep{width:1px;height:1.5rem;background:#e2e8f0;margin:0 .5rem}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+thead{background:#f1f5f9}
+th{text-align:left;padding:.75rem 1rem;font-size:.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}
+th:hover{color:#1e293b}
+td{padding:.75rem 1rem;border-top:1px solid #f1f5f9;font-size:.875rem;vertical-align:top}
+tr:hover{background:#f8fafc}
+tr.hidden{display:none}
+.sev{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.sev-critical{background:#fef2f2;color:#dc2626}
+.sev-warning{background:#fffbeb;color:#f59e0b}
+.sev-info{background:#eff6ff;color:#3b82f6}
+.team-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:500;background:#f1f5f9;color:#475569}
+.finding-id{font-family:"SF Mono",Monaco,monospace;font-size:.75rem;color:#94a3b8}
+.desc{max-width:400px}
+.fix{max-width:300px;color:#475569;font-size:.8rem}
+.page-path{font-family:"SF Mono",Monaco,monospace;font-size:.8rem;color:#6366f1}
+.status-cell{text-align:center;white-space:nowrap}
+.status-wrap{display:inline-flex;align-items:center;gap:.375rem}
+.status-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.status-dot[data-status="open"]{background:#94a3b8}
+.status-dot[data-status="approved"]{background:#8b5cf6}
+.status-dot[data-status="in_progress"]{background:#f59e0b;animation:pulse 1.5s ease-in-out infinite}
+.status-dot[data-status="fixed"]{background:#22c55e}
+.status-dot[data-status="needs_review"]{background:#ec4899}
+.status-dot[data-status="wontfix"]{background:#64748b}
+.status-dot[data-status="deferred"]{background:transparent;border:1.5px dashed #64748b}
+.status-dot[data-status="no_fix_needed"]{background:#06b6d4}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+.status-select{padding:.25rem .5rem;border:1px solid #e2e8f0;border-radius:4px;font-size:.75rem;background:#fff;cursor:pointer}
+th .sort-arrow{font-size:.6rem;margin-left:.25rem;opacity:.4}
+th.sorted .sort-arrow{opacity:1}
+th.sorted-asc .sort-arrow::after{content:' \25B2'}
+th.sorted-desc .sort-arrow::after{content:' \25BC'}
+.action-bar{display:flex;gap:.5rem;margin-top:1.5rem;justify-content:flex-end;align-items:center}
+.btn{padding:.5rem 1rem;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;font-size:.8rem;font-weight:500}
+.btn:hover{background:#f1f5f9}
+.btn-primary{background:#1e293b;color:#fff;border-color:#1e293b}
+.btn-primary:hover{background:#334155}
+.btn-add{background:#8b5cf6;color:#fff;border-color:#8b5cf6}
+.btn-add:hover{background:#7c3aed}
+/* Modal */
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:100;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:#fff;border-radius:16px;padding:2rem;width:90%;max-width:560px;max-height:90vh;overflow-y:auto;box-shadow:0 20px 60px rgba(0,0,0,.2)}
+.modal h2{font-size:1.25rem;margin-bottom:1.5rem}
+.form-group{margin-bottom:1rem}
+.form-group label{display:block;font-size:.8rem;font-weight:600;color:#64748b;margin-bottom:.25rem;text-transform:uppercase;letter-spacing:.03em}
+.form-group input,.form-group select,.form-group textarea{width:100%;padding:.5rem .75rem;border:1px solid #e2e8f0;border-radius:6px;font-size:.875rem;font-family:inherit}
+.form-group textarea{min-height:80px;resize:vertical}
+.form-row{display:grid;grid-template-columns:1fr 1fr;gap:1rem}
+.modal-actions{display:flex;gap:.5rem;justify-content:flex-end;margin-top:1.5rem}
+.loading{text-align:center;padding:4rem;color:#94a3b8}
+.error{text-align:center;padding:2rem;color:#dc2626;background:#fef2f2;border-radius:12px;margin:2rem 0}
+@media(max-width:768px){.stats{grid-template-columns:repeat(2,1fr)}table{display:block;overflow-x:auto}.desc,.fix{max-width:200px}.form-row{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<div class="container">
+<h1 id="title">Forge QC Dashboard</h1>
+<p class="subtitle" id="subtitle">Loading...</p>
+<div class="progress-bar"><div class="progress-fill" id="progress-fill" style="width:0%"></div></div>
+<div class="stats" id="stats"></div>
+<div class="toolbar" id="toolbar"></div>
+<div id="table-container"><div class="loading">Loading findings from Supabase...</div></div>
+<div class="action-bar">
+  <span id="sync-status" style="font-size:.8rem;margin-right:auto"></span>
+  <span style="font-size:.75rem;color:#94a3b8">Polling every 5s</span>
+  <button class="btn btn-add" onclick="openAddModal()">+ Add Finding</button>
+  <button class="btn" onclick="exportJSON()">Export JSON</button>
+  <button class="btn btn-primary" onclick="window.print()">Print / PDF</button>
+</div>
+</div>
+
+<!-- Add Finding Modal -->
+<div class="modal-overlay" id="add-modal">
+<div class="modal">
+<h2>Add Finding</h2>
+<div class="form-row">
+  <div class="form-group"><label>Finding ID</label><input id="add-id" placeholder="e.g. CUSTOM-001"></div>
+  <div class="form-group"><label>Severity</label><select id="add-severity"><option value="critical">Critical</option><option value="warning" selected>Warning</option><option value="info">Info</option></select></div>
+</div>
+<div class="form-row">
+  <div class="form-group"><label>Team</label><select id="add-team"><option value="content">Content QC</option><option value="links">Link Checker</option><option value="visual">Visual & Assets</option><option value="ux">UX Review</option><option value="accessibility">Accessibility</option><option value="seo">SEO & Meta</option><option value="custom">Custom</option></select></div>
+  <div class="form-group"><label>Page</label><input id="add-page" placeholder="e.g. /about-us"></div>
+</div>
+<div class="form-group"><label>Element</label><input id="add-element" placeholder="e.g. .hero-heading"></div>
+<div class="form-group"><label>Description</label><textarea id="add-desc" placeholder="What's wrong?"></textarea></div>
+<div class="form-group"><label>Suggested Fix</label><textarea id="add-fix" placeholder="How to fix it"></textarea></div>
+<div class="modal-actions">
+  <button class="btn" onclick="closeAddModal()">Cancel</button>
+  <button class="btn btn-add" onclick="submitFinding()">Add Finding</button>
+</div>
+</div>
+</div>
+
+<script>
+// Config from URL params
+const params = new URLSearchParams(window.location.search);
+const PROJECT = params.get('project') || 'wcc';
+const AUDIT_DATE = params.get('date') || '2026-04-02';
+const SUPA_URL = params.get('supa_url') || 'https://xwkypiqpyxntupoxikjg.supabase.co';
+const SUPA_KEY = params.get('supa_key') || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh3a3lwaXFweXhudHVwb3hpa2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzM1MTY2ODUsImV4cCI6MjA4OTA5MjY4NX0.SD2291iMmYLIAFwkawHp1LpmCD-eyQ8oBx4reZqhL-U';
+
+const TEAM_LABELS = {content:'Content QC',links:'Link Checker',visual:'Visual & Assets',ux:'UX Review',accessibility:'Accessibility',seo:'SEO & Meta',custom:'Custom'};
+const SEV_ORDER = {critical:0,warning:1,info:2};
+const STATUS_ORDER = {open:0,approved:1,in_progress:2,needs_review:3,fixed:4,no_fix_needed:5,wontfix:6,deferred:7};
+const STATUS_LABELS = {open:'Open',approved:'Approve Fix',in_progress:'In Progress',fixed:'Fixed',needs_review:'Needs Review',no_fix_needed:'No Fix Needed',wontfix:"Won't Fix",deferred:'Defer'};
+const STATUSES = Object.keys(STATUS_LABELS);
+
+let allFindings = [];
+let filters = {severity:'all',team:'all',status:'all'};
+let currentSort = {col:null,dir:'asc'};
+
+async function supaFetch(path, opts={}) {
+  return fetch(`${SUPA_URL}/rest/v1/${path}`, {...opts, headers:{'apikey':SUPA_KEY,'Authorization':`Bearer ${SUPA_KEY}`,'Content-Type':'application/json','Prefer':opts.prefer||'return=minimal',...opts.headers}});
+}
+
+function esc(s) { return s ? String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;') : ''; }
+
+async function loadFindings() {
+  try {
+    const res = await supaFetch(`qc_findings?project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}&select=*&order=id`, {prefer:'return=representation'});
+    allFindings = await res.json();
+    render();
+  } catch(e) {
+    document.getElementById('table-container').innerHTML = `<div class="error">Failed to load from Supabase: ${e.message}</div>`;
+  }
+}
+
+async function pollStatuses() {
+  try {
+    const res = await supaFetch(`qc_findings?project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}&select=id,finding_id,status,notes`, {prefer:'return=representation'});
+    const data = await res.json();
+    const map = {}; data.forEach(r => { map[r.finding_id] = r; });
+    let changed = false;
+    allFindings.forEach(f => {
+      const r = map[f.finding_id];
+      if (r && r.status !== f.status) { f.status = r.status; f.notes = r.notes; changed = true; }
+    });
+    // Check for new findings
+    if (data.length !== allFindings.length) { await loadFindings(); return; }
+    if (changed) updateTable();
+  } catch(e) {}
+}
+
+function render() {
+  const actionable = allFindings.filter(f => f.notes !== 'positive');
+  const positive = allFindings.filter(f => f.notes === 'positive');
+  const counts = {};
+  actionable.forEach(f => { counts[f.status] = (counts[f.status]||0)+1; });
+  const resolved = (counts.fixed||0) + (counts.no_fix_needed||0) + (counts.wontfix||0);
+  const total = actionable.length;
+  const pct = total ? Math.round(resolved/total*100) : 0;
+  const teamCounts = {};
+  actionable.forEach(f => { teamCounts[f.team] = (teamCounts[f.team]||0)+1; });
+
+  // Title
+  const projectName = PROJECT.toUpperCase();
+  document.getElementById('title').textContent = `${projectName} QC Punchlist`;
+  document.getElementById('subtitle').textContent = `${AUDIT_DATE} \u00b7 ${total} actionable \u00b7 ${positive.length} positive \u00b7 ${pct}% resolved \u00b7 Live from Supabase`;
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.title = `${projectName} QC \u2014 ${pct}%`;
+
+  // Stats
+  const statsEl = document.getElementById('stats');
+  statsEl.innerHTML = `
+    <div class="stat-card"><div class="stat-number" style="color:#22c55e">${counts.fixed||0}</div><div class="stat-label">Fixed</div></div>
+    <div class="stat-card"><div class="stat-number" style="color:#8b5cf6">${counts.approved||0}</div><div class="stat-label">Approved</div></div>
+    <div class="stat-card"><div class="stat-number" style="color:#06b6d4">${counts.no_fix_needed||0}</div><div class="stat-label">No Fix Needed</div></div>
+    <div class="stat-card"><div class="stat-number" style="color:#64748b">${counts.wontfix||0}</div><div class="stat-label">Won't Fix</div></div>
+    <div class="stat-card"><div class="stat-number" style="color:#94a3b8">${counts.deferred||0}</div><div class="stat-label">Deferred</div></div>
+    <div class="stat-card"><div class="stat-number">${total}</div><div class="stat-label">Total</div></div>
+  `;
+
+  // Toolbar
+  const teams = [...new Set(actionable.map(f=>f.team))].sort();
+  const toolbarEl = document.getElementById('toolbar');
+  toolbarEl.innerHTML = `
+    <span class="filter-label">Severity:</span>
+    <button class="filter-btn active" data-filter="severity" data-value="all">All</button>
+    <button class="filter-btn" data-filter="severity" data-value="critical">Critical</button>
+    <button class="filter-btn" data-filter="severity" data-value="warning">Warning</button>
+    <button class="filter-btn" data-filter="severity" data-value="info">Info</button>
+    <div class="filter-sep"></div>
+    <span class="filter-label">Team:</span>
+    <button class="filter-btn active" data-filter="team" data-value="all">All</button>
+    ${teams.map(t=>`<button class="filter-btn" data-filter="team" data-value="${t}">${TEAM_LABELS[t]||t}</button>`).join('')}
+    <div class="filter-sep"></div>
+    <span class="filter-label">Status:</span>
+    <button class="filter-btn active" data-filter="status" data-value="all">All</button>
+    ${STATUSES.filter(s=>counts[s]).map(s=>`<button class="filter-btn" data-filter="status" data-value="${s}">${STATUS_LABELS[s]}</button>`).join('')}
+  `;
+  toolbarEl.querySelectorAll('.filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const ft=btn.dataset.filter, val=btn.dataset.value;
+      filters[ft]=val;
+      toolbarEl.querySelectorAll(`.filter-btn[data-filter="${ft}"]`).forEach(b=>b.classList.remove('active'));
+      btn.classList.add('active');
+      applyFilters();
+    });
+  });
+
+  // Table
+  renderTable(actionable);
+}
+
+function renderTable(items) {
+  const sorted = [...items].sort((a,b) => {
+    const va = SEV_ORDER[a.severity]??9, vb = SEV_ORDER[b.severity]??9;
+    if (va !== vb) return va - vb;
+    return (a.team||'').localeCompare(b.team||'') || (a.finding_id||'').localeCompare(b.finding_id||'');
+  });
+
+  const container = document.getElementById('table-container');
+  container.innerHTML = `
+    <table id="findings-table">
+    <thead><tr>
+      <th data-sort="id" style="width:80px">ID<span class="sort-arrow"></span></th>
+      <th data-sort="severity" style="width:80px">Severity<span class="sort-arrow"></span></th>
+      <th data-sort="team" style="width:90px">Team<span class="sort-arrow"></span></th>
+      <th data-sort="page" style="width:120px">Page<span class="sort-arrow"></span></th>
+      <th>Issue</th>
+      <th>Suggested Fix</th>
+      <th data-sort="status" style="width:130px">Status<span class="sort-arrow"></span></th>
+    </tr></thead>
+    <tbody>${sorted.map(f => rowHTML(f)).join('')}</tbody>
+    </table>
+  `;
+
+  // Bind sort
+  container.querySelectorAll('th[data-sort]').forEach(th => {
+    th.addEventListener('click', () => sortTable(th.dataset.sort));
+  });
+  // Bind status changes
+  container.querySelectorAll('.status-select').forEach(sel => {
+    sel.addEventListener('change', () => {
+      const fid = sel.dataset.id;
+      const f = allFindings.find(x=>x.finding_id===fid);
+      if(f) f.status = sel.value;
+      sel.closest('.status-wrap').querySelector('.status-dot').dataset.status = sel.value;
+      sel.closest('tr').dataset.status = sel.value;
+      saveStatus(fid, sel.value);
+    });
+  });
+  applyFilters();
+}
+
+function rowHTML(f) {
+  const desc = f.element ? `<strong>${esc(f.element)}</strong><br>${esc(f.description)}` : esc(f.description);
+  const notes = f.notes && f.notes !== 'positive' && f.notes !== 'Informational only \u2014 no action needed.' ? `<br><em style="color:#6366f1;font-size:.8rem">Note: ${esc(f.notes)}</em>` : '';
+  const opts = STATUSES.map(s => `<option value="${s}"${s===f.status?' selected':''}>${STATUS_LABELS[s]}</option>`).join('');
+  return `<tr data-severity="${f.severity}" data-team="${f.team}" data-status="${f.status}">
+    <td><span class="finding-id">${esc(f.finding_id)}</span></td>
+    <td><span class="sev sev-${f.severity}">${f.severity}</span></td>
+    <td><span class="team-badge">${TEAM_LABELS[f.team]||f.team}</span></td>
+    <td><span class="page-path">${esc(f.page)}</span></td>
+    <td class="desc">${desc}${notes}</td>
+    <td class="fix">${esc(f.suggested_fix)}</td>
+    <td class="status-cell"><span class="status-wrap"><span class="status-dot" data-status="${f.status}"></span><select class="status-select" data-id="${f.finding_id}">${opts}</select></span></td>
+  </tr>`;
+}
+
+function applyFilters() {
+  document.querySelectorAll('#findings-table tbody tr').forEach(row => {
+    const s = filters.severity==='all'||row.dataset.severity===filters.severity;
+    const t = filters.team==='all'||row.dataset.team===filters.team;
+    const st = filters.status==='all'||row.dataset.status===filters.status;
+    row.classList.toggle('hidden',!(s&&t&&st));
+  });
+}
+
+function updateTable() {
+  document.querySelectorAll('.status-select').forEach(sel => {
+    const f = allFindings.find(x=>x.finding_id===sel.dataset.id);
+    if(f && sel.value !== f.status) {
+      sel.value = f.status;
+      sel.closest('.status-wrap').querySelector('.status-dot').dataset.status = f.status;
+      sel.closest('tr').dataset.status = f.status;
+    }
+  });
+  // Re-render stats
+  const actionable = allFindings.filter(f=>f.notes!=='positive');
+  const counts = {};
+  actionable.forEach(f=>{counts[f.status]=(counts[f.status]||0)+1});
+  const resolved = (counts.fixed||0)+(counts.no_fix_needed||0)+(counts.wontfix||0);
+  const pct = actionable.length ? Math.round(resolved/actionable.length*100) : 0;
+  document.getElementById('progress-fill').style.width = pct+'%';
+  document.getElementById('subtitle').textContent = `${AUDIT_DATE} \u00b7 ${actionable.length} actionable \u00b7 ${pct}% resolved \u00b7 Live from Supabase`;
+  applyFilters();
+}
+
+function sortTable(col) {
+  const dir = (currentSort.col===col && currentSort.dir==='asc') ? 'desc' : 'asc';
+  currentSort = {col,dir};
+  document.querySelectorAll('th[data-sort]').forEach(h=>h.classList.remove('sorted','sorted-asc','sorted-desc'));
+  document.querySelector(`th[data-sort="${col}"]`)?.classList.add('sorted',dir==='asc'?'sorted-asc':'sorted-desc');
+  const tbody = document.querySelector('#findings-table tbody');
+  const rows = Array.from(tbody.querySelectorAll('tr'));
+  rows.sort((a,b) => {
+    let va = getSortVal(a,col), vb = getSortVal(b,col);
+    if(typeof va==='number'&&typeof vb==='number') return dir==='asc'?va-vb:vb-va;
+    return dir==='asc'?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
+  });
+  rows.forEach(r=>tbody.appendChild(r));
+}
+
+function getSortVal(row,col) {
+  switch(col) {
+    case 'id': return row.querySelector('.finding-id')?.textContent||'';
+    case 'severity': return SEV_ORDER[row.dataset.severity]??9;
+    case 'team': return row.dataset.team||'';
+    case 'page': return row.querySelector('.page-path')?.textContent||'';
+    case 'status': return STATUS_ORDER[row.dataset.status]??9;
+  }
+}
+
+// Save
+let saveQueue = new Map(), saveTimer = null;
+function saveStatus(id, status) {
+  saveQueue.set(id, status);
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(flushSaves, 500);
+}
+async function flushSaves() {
+  if(!saveQueue.size) return;
+  const updates = new Map(saveQueue); saveQueue.clear();
+  for(const [id,status] of updates) {
+    try { await supaFetch(`qc_findings?finding_id=eq.${encodeURIComponent(id)}&project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}`, {method:'PATCH',body:JSON.stringify({status,updated_at:new Date().toISOString()})}); } catch(e){}
+  }
+  const ind = document.getElementById('sync-status');
+  if(ind){ind.textContent='Saved';ind.style.color='#22c55e';setTimeout(()=>{ind.textContent=''},2000)}
+}
+
+// Add Finding
+function openAddModal() { document.getElementById('add-modal').classList.add('open'); document.getElementById('add-id').focus(); }
+function closeAddModal() { document.getElementById('add-modal').classList.remove('open'); }
+
+async function submitFinding() {
+  const finding = {
+    finding_id: document.getElementById('add-id').value.trim(),
+    project: PROJECT,
+    audit_date: AUDIT_DATE,
+    severity: document.getElementById('add-severity').value,
+    team: document.getElementById('add-team').value,
+    page: document.getElementById('add-page').value.trim(),
+    element: document.getElementById('add-element').value.trim(),
+    description: document.getElementById('add-desc').value.trim(),
+    suggested_fix: document.getElementById('add-fix').value.trim(),
+    status: 'open'
+  };
+  if(!finding.finding_id || !finding.description) { alert('ID and Description are required.'); return; }
+  try {
+    await supaFetch('qc_findings', {method:'POST', body:JSON.stringify(finding), prefer:'return=representation'});
+    closeAddModal();
+    // Clear form
+    ['add-id','add-page','add-element','add-desc','add-fix'].forEach(id => document.getElementById(id).value='');
+    await loadFindings();
+    const ind = document.getElementById('sync-status');
+    if(ind){ind.textContent='Added';ind.style.color='#8b5cf6';setTimeout(()=>{ind.textContent=''},2000)}
+  } catch(e) { alert('Failed to add: '+e.message); }
+}
+
+// Close modal on overlay click
+document.getElementById('add-modal').addEventListener('click', e => { if(e.target===e.currentTarget) closeAddModal(); });
+// Close on Escape
+document.addEventListener('keydown', e => { if(e.key==='Escape') closeAddModal(); });
+
+// Export
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(allFindings,null,2)],{type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href=url; a.download=`qc-${PROJECT}-${AUDIT_DATE}.json`; a.click();
+  URL.revokeObjectURL(url);
+}
+
+// Init
+loadFindings();
+setInterval(pollStatuses, 5000);
+</script>
+</body>
+</html>
