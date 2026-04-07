@@ -35,7 +35,15 @@ tr.hidden{display:none}
 .sev-info{background:#eff6ff;color:#3b82f6}
 .team-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:500;background:#f1f5f9;color:#475569}
 .finding-id{font-family:"SF Mono",Monaco,monospace;font-size:.75rem;color:#94a3b8}
-.col-id{width:6%}.col-sev{width:6%}.col-team{width:7%}.col-page{width:8%}.col-desc{width:30%}.col-fix{width:22%}.col-status{width:12%}
+.col-id{width:6%}.col-sev{width:6%}.col-team{width:7%}.col-page{width:8%}.col-desc{width:28%}.col-fix{width:20%}.col-status{width:10%}.col-verify{width:15%}
+.col-verify.hidden-col,.td-verify.hidden-col{display:none}
+.verify-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
+.verify-unverified{background:#fef2f2;color:#dc2626}
+.verify-verified{background:#f0fdf4;color:#16a34a}
+.verify-in_progress{background:#eff6ff;color:#3b82f6}
+.verify-select{font-size:.75rem;padding:.25rem .5rem;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer}
+.btn-toggle-verify{padding:.375rem .75rem;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;font-size:.75rem;transition:all .15s}
+.btn-toggle-verify.active{background:#6366f1;color:#fff;border-color:#6366f1}
 .page-path{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:block;max-width:100%}
 .desc{word-wrap:break-word}
 .fix{color:#475569;font-size:.8rem;word-wrap:break-word}
@@ -91,6 +99,7 @@ th.sorted-desc .sort-arrow::after{content:' \25BC'}
 <div class="action-bar">
   <span id="sync-status" style="font-size:.8rem;margin-right:auto"></span>
   <span style="font-size:.75rem;color:#94a3b8">Polling every 5s</span>
+  <button class="btn-toggle-verify" id="verify-toggle" onclick="toggleVerifyCol()">Show Verification</button>
   <button class="btn btn-add" onclick="openAddModal()">+ Add Finding</button>
   <button class="btn" onclick="exportJSON()">Export JSON</button>
   <button class="btn btn-primary" onclick="window.print()">Print / PDF</button>
@@ -155,7 +164,7 @@ async function loadFindings() {
 
 async function pollStatuses() {
   try {
-    const res = await supaFetch(`qc_findings?project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}&select=id,finding_id,status,notes`, {prefer:'return=representation'});
+    const res = await supaFetch(`qc_findings?project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}&select=id,finding_id,status,notes,verification_status,verified_by,verified_at`, {prefer:'return=representation'});
     const data = await res.json();
     const map = {}; data.forEach(r => { map[r.finding_id] = r; });
     let changed = false;
@@ -248,6 +257,7 @@ function renderTable(items) {
       <th class="col-desc">Issue</th>
       <th class="col-fix">Suggested Fix</th>
       <th data-sort="status" class="col-status">Status<span class="sort-arrow"></span></th>
+      <th class="col-verify hidden-col" data-sort="verification_status">Verification<span class="sort-arrow"></span></th>
     </tr></thead>
     <tbody>${sorted.map(f => rowHTML(f)).join('')}</tbody>
     </table>
@@ -283,6 +293,7 @@ function rowHTML(f) {
     <td class="desc">${desc}${notes}</td>
     <td class="fix">${esc(f.suggested_fix)}</td>
     <td class="status-cell"><span class="status-wrap"><span class="status-dot" data-status="${f.status}"></span><select class="status-select" data-id="${f.finding_id}">${opts}</select></span></td>
+    <td class="td-verify hidden-col"><span class="verify-badge verify-${f.verification_status||'unverified'}">${f.verification_status||'unverified'}</span>${f.verified_by?`<br><span style="font-size:.65rem;color:#94a3b8">${esc(f.verified_by)}</span>`:''}</td>
   </tr>`;
 }
 
@@ -403,6 +414,16 @@ function exportJSON() {
 // Init
 loadFindings();
 setInterval(pollStatuses, 5000);
+
+let verifyVisible = false;
+function toggleVerifyCol() {
+  verifyVisible = !verifyVisible;
+  document.querySelectorAll('.col-verify,.td-verify').forEach(el => {
+    el.classList.toggle('hidden-col', !verifyVisible);
+  });
+  document.getElementById('verify-toggle').classList.toggle('active', verifyVisible);
+  document.getElementById('verify-toggle').textContent = verifyVisible ? 'Hide Verification' : 'Show Verification';
+}
 </script>
 </body>
 </html>
