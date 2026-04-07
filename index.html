@@ -7,7 +7,7 @@
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:#f8fafc;color:#1e293b;line-height:1.5}
-.container{max-width:1200px;margin:0 auto;padding:2rem 1.5rem}
+.container{max-width:1600px;margin:0 auto;padding:2rem 1.5rem}
 h1{font-size:1.75rem;font-weight:700;margin-bottom:.25rem}
 .subtitle{color:#64748b;margin-bottom:2rem}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(120px,1fr));gap:1rem;margin-bottom:2rem}
@@ -22,7 +22,7 @@ h1{font-size:1.75rem;font-weight:700;margin-bottom:.25rem}
 .filter-btn:hover{border-color:#94a3b8}
 .filter-btn.active{background:#1e293b;color:#fff;border-color:#1e293b}
 .filter-sep{width:1px;height:1.5rem;background:#e2e8f0;margin:0 .5rem}
-table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+table{width:100%;border-collapse:collapse;background:#fff;border-radius:12px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.08);table-layout:fixed}
 thead{background:#f1f5f9}
 th{text-align:left;padding:.75rem 1rem;font-size:.75rem;font-weight:600;color:#64748b;text-transform:uppercase;letter-spacing:.05em;cursor:pointer;user-select:none}
 th:hover{color:#1e293b}
@@ -35,8 +35,9 @@ tr.hidden{display:none}
 .sev-info{background:#eff6ff;color:#3b82f6}
 .team-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:500;background:#f1f5f9;color:#475569}
 .finding-id{font-family:"SF Mono",Monaco,monospace;font-size:.75rem;color:#94a3b8}
-.desc{max-width:400px}
-.fix{max-width:300px;color:#475569;font-size:.8rem}
+.col-id{width:8%}.col-sev{width:7%}.col-team{width:9%}.col-page{width:10%}.col-desc{width:36%}.col-fix{width:22%}.col-status{width:8%}
+.desc{word-wrap:break-word}
+.fix{color:#475569;font-size:.8rem;word-wrap:break-word}
 .page-path{font-family:"SF Mono",Monaco,monospace;font-size:.8rem;color:#6366f1}
 .status-cell{text-align:center;white-space:nowrap}
 .status-wrap{display:inline-flex;align-items:center;gap:.375rem}
@@ -239,13 +240,13 @@ function renderTable(items) {
   container.innerHTML = `
     <table id="findings-table">
     <thead><tr>
-      <th data-sort="id" style="width:80px">ID<span class="sort-arrow"></span></th>
-      <th data-sort="severity" style="width:80px">Severity<span class="sort-arrow"></span></th>
-      <th data-sort="team" style="width:90px">Team<span class="sort-arrow"></span></th>
-      <th data-sort="page" style="width:120px">Page<span class="sort-arrow"></span></th>
-      <th>Issue</th>
-      <th>Suggested Fix</th>
-      <th data-sort="status" style="width:130px">Status<span class="sort-arrow"></span></th>
+      <th data-sort="id" class="col-id">ID<span class="sort-arrow"></span></th>
+      <th data-sort="severity" class="col-sev">Severity<span class="sort-arrow"></span></th>
+      <th data-sort="team" class="col-team">Team<span class="sort-arrow"></span></th>
+      <th data-sort="page" class="col-page">Page<span class="sort-arrow"></span></th>
+      <th class="col-desc">Issue</th>
+      <th class="col-fix">Suggested Fix</th>
+      <th data-sort="status" class="col-status">Status<span class="sort-arrow"></span></th>
     </tr></thead>
     <tbody>${sorted.map(f => rowHTML(f)).join('')}</tbody>
     </table>
