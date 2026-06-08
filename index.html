@@ -35,8 +35,23 @@ tr.hidden{display:none}
 .sev-info{background:#eff6ff;color:#3b82f6}
 .team-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:500;background:#f1f5f9;color:#475569}
 .finding-id{font-family:"SF Mono",Monaco,monospace;font-size:.75rem;color:#94a3b8}
-.col-id{width:6%}.col-sev{width:6%}.col-team{width:7%}.col-page{width:8%}.col-desc{width:28%}.col-fix{width:20%}.col-status{width:10%}.col-verify{width:15%}
+.col-expand{width:2.5%}.col-id{width:5.5%}.col-sev{width:6%}.col-team{width:7%}.col-page{width:7%}.col-desc{width:29%}.col-fix{width:21%}.col-status{width:9%}.col-verify{width:13%}
 .col-verify.hidden-col,.td-verify.hidden-col{display:none}
+.expand-btn{width:22px;height:22px;border:1px solid #e2e8f0;border-radius:6px;background:#fff;cursor:pointer;font-size:.7rem;color:#64748b;display:inline-flex;align-items:center;justify-content:center;transition:transform .15s,background .15s}
+.expand-btn:hover{background:#f1f5f9;color:#1e293b}
+.expand-btn.open{transform:rotate(90deg);background:#1e293b;color:#fff;border-color:#1e293b}
+tr.detail-row{display:none;background:#f8fafc}
+tr.detail-row.open{display:table-row}
+tr.detail-row td{padding:1rem 1.5rem;border-top:1px dashed #cbd5e1}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:1.25rem 2rem}
+.detail-grid.single{grid-template-columns:1fr}
+.detail-block{font-size:.8rem}
+.detail-label{font-size:.65rem;font-weight:700;color:#64748b;text-transform:uppercase;letter-spacing:.06em;margin-bottom:.35rem;display:flex;align-items:center;gap:.4rem}
+.detail-label::before{content:'';width:3px;height:11px;background:#94a3b8;border-radius:2px}
+.detail-text{color:#1e293b;line-height:1.55;white-space:pre-wrap;word-break:break-word;font-family:"SF Mono",Monaco,monospace;font-size:.75rem;background:#fff;border:1px solid #e2e8f0;border-radius:6px;padding:.6rem .75rem}
+.detail-text.prose{font-family:inherit;font-size:.825rem}
+.plain-text{color:#0f172a;line-height:1.5;white-space:pre-wrap;word-break:break-word}
+.plain-missing{color:#94a3b8;font-style:italic;font-size:.8rem}
 .verify-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 .verify-unverified{background:#fef2f2;color:#dc2626}
 .verify-verified{background:#f0fdf4;color:#16a34a}
@@ -250,6 +265,7 @@ function renderTable(items) {
   container.innerHTML = `
     <table id="findings-table">
     <thead><tr>
+      <th class="col-expand"></th>
       <th data-sort="id" class="col-id">ID<span class="sort-arrow"></span></th>
       <th data-sort="severity" class="col-sev">Severity<span class="sort-arrow"></span></th>
       <th data-sort="team" class="col-team">Team<span class="sort-arrow"></span></th>
@@ -274,35 +290,97 @@ function renderTable(items) {
       const f = allFindings.find(x=>x.finding_id===fid);
       if(f) f.status = sel.value;
       sel.closest('.status-wrap').querySelector('.status-dot').dataset.status = sel.value;
-      sel.closest('tr').dataset.status = sel.value;
+      // Find main row (skip the detail row that immediately follows)
+      const tr = sel.closest('tr');
+      tr.dataset.status = sel.value;
       saveStatus(fid, sel.value);
+    });
+  });
+  // Bind expand toggles
+  container.querySelectorAll('.expand-btn').forEach(btn => {
+    btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const fid = btn.dataset.toggle;
+      const detail = container.querySelector(`tr.detail-row[data-detail-for="${CSS.escape(fid)}"]`);
+      if (!detail) return;
+      const isOpen = detail.classList.toggle('open');
+      btn.classList.toggle('open', isOpen);
+      btn.setAttribute('aria-label', isOpen ? 'Hide technical detail' : 'Show technical detail');
     });
   });
   applyFilters();
 }
 
 function rowHTML(f) {
-  const desc = f.element ? `<strong>${esc(f.element)}</strong><br>${esc(f.description)}` : esc(f.description);
   const notes = f.notes && f.notes !== 'positive' && f.notes !== 'Informational only \u2014 no action needed.' ? `<br><em style="color:#6366f1;font-size:.8rem">Note: ${esc(f.notes)}</em>` : '';
   const opts = STATUSES.map(s => `<option value="${s}"${s===f.status?' selected':''}>${STATUS_LABELS[s]}</option>`).join('');
-  return `<tr data-severity="${f.severity}" data-team="${f.team}" data-status="${f.status}">
+
+  // Plain-English fields lead the row. Fall back to technical text if plain hasn't been backfilled yet.
+  const plainIssue = f.plain_issue
+    ? esc(f.plain_issue)
+    : (f.description ? `<span class="plain-missing">[plain version pending] ${esc(f.description).slice(0,180)}${(f.description||'').length>180?'\u2026':''}</span>` : '<span class="plain-missing">(no description)</span>');
+  const plainFix = f.plain_fix
+    ? esc(f.plain_fix)
+    : (f.suggested_fix ? `<span class="plain-missing">[plain version pending] ${esc(f.suggested_fix).slice(0,180)}${(f.suggested_fix||'').length>180?'\u2026':''}</span>` : '<span class="plain-missing">\u2014</span>');
+
+  // Detail row (hidden by default). Holds the original technical text.
+  const hasElement = f.element && f.element.trim();
+  const detailGridClass = hasElement ? 'detail-grid' : 'detail-grid single';
+  const elementBlock = hasElement ? `<div class="detail-block"><div class="detail-label">User impact / element</div><div class="detail-text prose">${esc(f.element)}</div></div>` : '';
+  const techIssue = f.description ? esc(f.description) : '(none recorded)';
+  const techFix = f.suggested_fix ? esc(f.suggested_fix) : '(none recorded)';
+
+  const mainRow = `<tr data-fid="${esc(f.finding_id)}" data-severity="${f.severity}" data-team="${f.team}" data-status="${f.status}">
+    <td><button class="expand-btn" data-toggle="${esc(f.finding_id)}" aria-label="Show technical detail">\u203a</button></td>
     <td><span class="finding-id">${esc(f.finding_id)}</span></td>
     <td><span class="sev sev-${f.severity}">${f.severity}</span></td>
     <td><span class="team-badge">${TEAM_LABELS[f.team]||f.team}</span></td>
     <td><span class="page-path">${esc(f.page)}</span></td>
-    <td class="desc">${desc}${notes}</td>
-    <td class="fix">${esc(f.suggested_fix)}</td>
+    <td class="desc"><div class="plain-text">${plainIssue}</div>${notes}</td>
+    <td class="fix"><div class="plain-text">${plainFix}</div></td>
     <td class="status-cell"><span class="status-wrap"><span class="status-dot" data-status="${f.status}"></span><select class="status-select" data-id="${f.finding_id}">${opts}</select></span></td>
     <td class="td-verify hidden-col"><span class="verify-badge verify-${f.verification_status||'unverified'}">${f.verification_status||'unverified'}</span>${f.verified_by?`<br><span style="font-size:.65rem;color:#94a3b8">${esc(f.verified_by)}</span>`:''}</td>
   </tr>`;
+
+  const detailRow = `<tr class="detail-row" data-detail-for="${esc(f.finding_id)}">
+    <td colspan="9">
+      <div class="${detailGridClass}">
+        <div class="detail-block">
+          <div class="detail-label">Technical \u2014 original issue</div>
+          <div class="detail-text">${techIssue}</div>
+        </div>
+        <div class="detail-block">
+          <div class="detail-label">Technical \u2014 original suggested fix</div>
+          <div class="detail-text">${techFix}</div>
+        </div>
+        ${elementBlock}
+        <div class="detail-block">
+          <div class="detail-label">File / location</div>
+          <div class="detail-text">${esc(f.page)||'\u2014'}</div>
+        </div>
+      </div>
+    </td>
+  </tr>`;
+
+  return mainRow + detailRow;
 }
 
 function applyFilters() {
-  document.querySelectorAll('#findings-table tbody tr').forEach(row => {
+  document.querySelectorAll('#findings-table tbody tr[data-fid]').forEach(row => {
     const s = filters.severity==='all'||row.dataset.severity===filters.severity;
     const t = filters.team==='all'||row.dataset.team===filters.team;
     const st = filters.status==='all'||row.dataset.status===filters.status;
-    row.classList.toggle('hidden',!(s&&t&&st));
+    const show = s && t && st;
+    row.classList.toggle('hidden', !show);
+    // Sync the detail row's visibility — if the main row is hidden, hide its detail too
+    const detail = document.querySelector(`tr.detail-row[data-detail-for="${CSS.escape(row.dataset.fid)}"]`);
+    if (detail) {
+      if (!show) {
+        detail.classList.add('hidden');
+      } else {
+        detail.classList.remove('hidden');
+      }
+    }
   });
 }
 
@@ -332,13 +410,21 @@ function sortTable(col) {
   document.querySelectorAll('th[data-sort]').forEach(h=>h.classList.remove('sorted','sorted-asc','sorted-desc'));
   document.querySelector(`th[data-sort="${col}"]`)?.classList.add('sorted',dir==='asc'?'sorted-asc':'sorted-desc');
   const tbody = document.querySelector('#findings-table tbody');
-  const rows = Array.from(tbody.querySelectorAll('tr'));
-  rows.sort((a,b) => {
-    let va = getSortVal(a,col), vb = getSortVal(b,col);
+  // Pair each main row with its detail row, sort the pairs, then re-append flat
+  const mainRows = Array.from(tbody.querySelectorAll('tr[data-fid]'));
+  const pairs = mainRows.map(r => ({
+    main: r,
+    detail: tbody.querySelector(`tr.detail-row[data-detail-for="${CSS.escape(r.dataset.fid)}"]`)
+  }));
+  pairs.sort((a,b) => {
+    let va = getSortVal(a.main,col), vb = getSortVal(b.main,col);
     if(typeof va==='number'&&typeof vb==='number') return dir==='asc'?va-vb:vb-va;
     return dir==='asc'?String(va).localeCompare(String(vb)):String(vb).localeCompare(String(va));
   });
-  rows.forEach(r=>tbody.appendChild(r));
+  pairs.forEach(p => {
+    tbody.appendChild(p.main);
+    if (p.detail) tbody.appendChild(p.detail);
+  });
 }
 
 function getSortVal(row,col) {
