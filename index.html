@@ -52,6 +52,17 @@ tr.detail-row td{padding:1rem 1.5rem;border-top:1px dashed #cbd5e1}
 .detail-text.prose{font-family:inherit;font-size:.825rem}
 .plain-text{color:#0f172a;line-height:1.5;white-space:pre-wrap;word-break:break-word}
 .plain-missing{color:#94a3b8;font-style:italic;font-size:.8rem}
+.note-block{grid-column:1 / -1;background:#fffbeb;border:1px solid #fde68a;border-radius:8px;padding:.85rem 1rem;margin-top:.25rem}
+.note-block .detail-label{margin-bottom:.5rem}
+.note-block .detail-label::before{background:#f59e0b}
+.note-textarea{width:100%;min-height:64px;padding:.6rem .75rem;border:1px solid #fde68a;border-radius:6px;font-family:inherit;font-size:.825rem;line-height:1.5;background:#fff;color:#1e293b;resize:vertical;transition:border-color .15s,box-shadow .15s}
+.note-textarea:focus{outline:none;border-color:#f59e0b;box-shadow:0 0 0 3px rgba(245,158,11,.15)}
+.note-meta{display:flex;justify-content:space-between;align-items:center;margin-top:.4rem;font-size:.7rem;color:#92400e}
+.note-status{font-weight:600}
+.note-status.saving{color:#3b82f6}
+.note-status.saved{color:#16a34a}
+.note-status.error{color:#dc2626}
+.has-note-pulse{display:inline-block;width:6px;height:6px;border-radius:50%;background:#f59e0b;margin-left:.4rem;vertical-align:middle}
 .verify-badge{display:inline-block;padding:.125rem .5rem;border-radius:4px;font-size:.7rem;font-weight:600;text-transform:uppercase;letter-spacing:.03em}
 .verify-unverified{background:#fef2f2;color:#dc2626}
 .verify-verified{background:#f0fdf4;color:#16a34a}
@@ -308,6 +319,54 @@ function renderTable(items) {
       btn.setAttribute('aria-label', isOpen ? 'Hide technical detail' : 'Show technical detail');
     });
   });
+  // Bind triage-note autosave
+  container.querySelectorAll('.note-textarea').forEach(ta => {
+    let timer = null;
+    const fid = ta.dataset.noteFor;
+    const statusEl = container.querySelector(`.note-status[data-note-status-for="${CSS.escape(fid)}"]`);
+    const setStatus = (txt, cls) => {
+      if (!statusEl) return;
+      statusEl.textContent = txt;
+      statusEl.className = `note-status ${cls||''}`;
+    };
+    const flush = () => {
+      const val = ta.value;
+      setStatus('Saving…', 'saving');
+      saveNote(fid, val, (ok, updatedAt) => {
+        if (ok) {
+          setStatus('Saved', 'saved');
+          const updEl = ta.closest('.note-block').querySelector('.note-updated');
+          if (updEl && updatedAt) updEl.textContent = `Last saved ${new Date(updatedAt).toLocaleString()}`;
+          // Toggle the pulse on the main row
+          const f = allFindings.find(x => x.finding_id === fid);
+          if (f) {
+            f.triage_note = val;
+            f.triage_note_updated_at = updatedAt;
+            const mainRow = container.querySelector(`tr[data-fid="${CSS.escape(fid)}"]`);
+            if (mainRow) {
+              const existingPulse = mainRow.querySelector('.has-note-pulse');
+              if (val.trim() && !existingPulse) {
+                mainRow.querySelector('.expand-btn').insertAdjacentHTML('afterend', '<span class="has-note-pulse" title="You have a note on this finding"></span>');
+              } else if (!val.trim() && existingPulse) {
+                existingPulse.remove();
+              }
+            }
+          }
+          setTimeout(() => setStatus('', ''), 1800);
+        } else {
+          setStatus('Save failed — retrying on next edit', 'error');
+        }
+      });
+    };
+    ta.addEventListener('input', () => {
+      clearTimeout(timer);
+      timer = setTimeout(flush, 900);
+    });
+    ta.addEventListener('blur', () => {
+      clearTimeout(timer);
+      flush();
+    });
+  });
   applyFilters();
 }
 
@@ -330,8 +389,10 @@ function rowHTML(f) {
   const techIssue = f.description ? esc(f.description) : '(none recorded)';
   const techFix = f.suggested_fix ? esc(f.suggested_fix) : '(none recorded)';
 
+  const hasNote = (f.triage_note || '').trim().length > 0;
+  const notePulse = hasNote ? '<span class="has-note-pulse" title="You have a note on this finding"></span>' : '';
   const mainRow = `<tr data-fid="${esc(f.finding_id)}" data-severity="${f.severity}" data-team="${f.team}" data-status="${f.status}">
-    <td><button class="expand-btn" data-toggle="${esc(f.finding_id)}" aria-label="Show technical detail">\u203a</button></td>
+    <td><button class="expand-btn" data-toggle="${esc(f.finding_id)}" aria-label="Show technical detail">\u203a</button>${notePulse}</td>
     <td><span class="finding-id">${esc(f.finding_id)}</span></td>
     <td><span class="sev sev-${f.severity}">${f.severity}</span></td>
     <td><span class="team-badge">${TEAM_LABELS[f.team]||f.team}</span></td>
@@ -342,9 +403,22 @@ function rowHTML(f) {
     <td class="td-verify hidden-col"><span class="verify-badge verify-${f.verification_status||'unverified'}">${f.verification_status||'unverified'}</span>${f.verified_by?`<br><span style="font-size:.65rem;color:#94a3b8">${esc(f.verified_by)}</span>`:''}</td>
   </tr>`;
 
+  const noteValue = f.triage_note || '';
+  const noteUpdatedAt = f.triage_note_updated_at
+    ? `Last saved ${new Date(f.triage_note_updated_at).toLocaleString()}`
+    : 'No note yet';
+
   const detailRow = `<tr class="detail-row" data-detail-for="${esc(f.finding_id)}">
     <td colspan="9">
-      <div class="${detailGridClass}">
+      <div class="detail-grid">
+        <div class="note-block">
+          <div class="detail-label">Your note (Claude reads this on the next session)</div>
+          <textarea class="note-textarea" data-note-for="${esc(f.finding_id)}" placeholder="Why are you approving / deferring / skipping this? Anything Claude should know before working on it?">${esc(noteValue)}</textarea>
+          <div class="note-meta">
+            <span class="note-updated">${noteUpdatedAt}</span>
+            <span class="note-status" data-note-status-for="${esc(f.finding_id)}"></span>
+          </div>
+        </div>
         <div class="detail-block">
           <div class="detail-label">Technical \u2014 original issue</div>
           <div class="detail-text">${techIssue}</div>
@@ -452,6 +526,20 @@ async function flushSaves() {
   }
   const ind = document.getElementById('sync-status');
   if(ind){ind.textContent='Saved';ind.style.color='#22c55e';setTimeout(()=>{ind.textContent=''},2000)}
+}
+
+async function saveNote(fid, val, cb) {
+  try {
+    const now = new Date().toISOString();
+    const res = await supaFetch(
+      `qc_findings?finding_id=eq.${encodeURIComponent(fid)}&project=eq.${PROJECT}&audit_date=eq.${AUDIT_DATE}`,
+      {method:'PATCH',body:JSON.stringify({triage_note:val,triage_note_updated_at:now,updated_at:now}),prefer:'return=representation',headers:{'Prefer':'return=representation'}}
+    );
+    if (!res.ok) { cb(false); return; }
+    const rows = await res.json();
+    const updatedAt = (rows && rows[0] && rows[0].triage_note_updated_at) || now;
+    cb(true, updatedAt);
+  } catch(e) { cb(false); }
 }
 
 // Add Finding
